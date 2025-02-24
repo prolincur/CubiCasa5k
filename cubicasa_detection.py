@@ -2,34 +2,27 @@
 
 import os
 from flask import Flask, request, jsonify
-from skimage import transform
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 from floortrans.models import get_model
-from floortrans.loaders import FloorplanSVG, DictToTensor, Compose, RotateNTurns
-from floortrans.plotting import segmentation_plot, polygons_to_image, draw_junction_from_dict, discrete_cmap
+from floortrans.plotting import polygons_to_image, discrete_cmap
 discrete_cmap()
-from floortrans.post_prosessing import split_prediction, get_polygons, split_validation
-from mpl_toolkits.axes_grid1 import AxesGrid
+from floortrans.post_prosessing import split_prediction, get_polygons
 import cv2
 import logging
 from io import BytesIO
 import base64
+from datetime import datetime
+from tracing_util import raster_to_vector
 
 app = Flask(__name__)
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('flask')
-logger.setLevel(logging.INFO)  # Set the logger to capture info level logs
-handler = logging.StreamHandler()  # Creates a stream handler that logs to stdout
-handler.setLevel(logging.INFO)  # Ensure the handler captures info level logs
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)  # Adds the handler to the Flask logger
+
+OUTPUT_DIR = "output_images" 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def img_to_base64(img_array, format="PNG"):
     """
@@ -55,17 +48,10 @@ def process_image():
         return jsonify({"error": "no file provided"}), 400
 
     file = request.files['file']
-    id_ = request.form.get('id')   # Get the ID from the form data
-
-    if not id_:
-        logger.error("ID not provided")
-        return jsonify({"error": "ID not provided"}), 400
     
     if file.filename == '':
         logger.error("No file selected for uploading")
         return jsonify({"error": "no file selected for uploading"}), 400
-    
-    logger.info(f"Processing file {file.filename} with ID {id_}")
     
     # Setup Model
     model = get_model('hg_furukawa_original', 51)
@@ -110,21 +96,33 @@ def process_image():
         icons_pred = F.softmax(prediction[0, 21+12:], 0).cpu().data.numpy()
         icons_pred = np.argmax(icons_pred, axis=0) # icons prediction
 
-        rooms_pred_base64 = img_to_base64(rooms_pred, format="PNG")
-
     # Process the prediction to get heatmaps, rooms, and icons
     heatmaps, rooms, icons = split_prediction(prediction, img_size, split)
     polygons, types, room_polygons, room_types = get_polygons((heatmaps, rooms, icons), 0.2, [1, 2])
 
     pol_room_seg, pol_icon_seg = polygons_to_image(polygons, types, room_polygons, room_types, height, width) # post process room and icon 
-    
-    pol_room_seg_base64 = img_to_base64(pol_room_seg, format="PNG")
 
-    # Return paths to the generated images
+    # Save the images to the output directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") 
+    output_files = {
+        "pol_room_seg": os.path.join(OUTPUT_DIR, f"{timestamp}_walls_segmented.png"),
+        "vector_output_path": os.path.join(OUTPUT_DIR, "vector_output_path.geojson")
+    }
+
+    # Save the images
+    plt.imsave(output_files["pol_room_seg"], pol_room_seg, format="PNG")
+
+    # vectorization
+    
+    logger.info("Starting vectorization of the post-processed image")
+    raster_to_vector(output_files["pol_room_seg"], output_files["vector_output_path"])
+    logger.info("Vectorization completed")
+
+    logger.info(f"Saved output images to {OUTPUT_DIR}")
+
+    # Return paths to the saved images
     return jsonify({
-        "status": "success",
-        "pre_processed_room_prediction_base64": rooms_pred_base64,
-        "post_processed_room_prediction_base64": pol_room_seg_base64,
+        "output_files": output_files,
     })
 
 

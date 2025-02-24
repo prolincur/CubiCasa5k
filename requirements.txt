@@ -89,3 +89,4 @@ flask-CORS
 fastapi
 uvicorn
 python-multipart
+rasterio
