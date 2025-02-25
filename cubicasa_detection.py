@@ -19,7 +19,14 @@ from tracing_util import raster_to_vector
 
 app = Flask(__name__)
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('flask')
+logger.setLevel(logging.INFO)  # Set the logger to capture info level logs
+handler = logging.StreamHandler()  # Creates a stream handler that logs to stdout
+handler.setLevel(logging.INFO)  # Ensure the handler captures info level logs
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)  # Adds the handler to the Flask logger
 
 OUTPUT_DIR = "output_images" 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -56,8 +63,6 @@ def process_image():
     # Setup Model
     model = get_model('hg_furukawa_original', 51)
 
-    room_classes = ["Background", "Outdoor", "Wall", "Kitchen", "Living Room" ,"Bed Room", "Bath", "Entry", "Railing", "Storage", "Garage", "Undefined"]
-    icon_classes = ["No Icon", "Window", "Door", "Closet", "Electrical Applience" ,"Toilet", "Sink", "Sauna Bench", "Fire Place", "Bathtub", "Chimney"]
     n_classes = 44
     split = [21, 12, 11]
 
@@ -106,14 +111,13 @@ def process_image():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") 
     output_files = {
         "pol_room_seg": os.path.join(OUTPUT_DIR, f"{timestamp}_walls_segmented.png"),
-        "vector_output_path": os.path.join(OUTPUT_DIR, "vector_output_path.geojson")
+        "vector_output_path": os.path.join(OUTPUT_DIR, f"{timestamp}_vector_output_path.geojson")
     }
 
     # Save the images
     plt.imsave(output_files["pol_room_seg"], pol_room_seg, format="PNG")
 
     # vectorization
-    
     logger.info("Starting vectorization of the post-processed image")
     raster_to_vector(output_files["pol_room_seg"], output_files["vector_output_path"])
     logger.info("Vectorization completed")

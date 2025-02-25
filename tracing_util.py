@@ -4,7 +4,7 @@ The source code is adapted from https://github.com/aliaksandr960/segment-anythin
 
 import shapely
 import rasterio
-import geopandas as gpd
+import json
 
 
 def raster_to_vector(source, output, simplify_tolerance=None, dst_crs=None, **kwargs):
@@ -32,59 +32,19 @@ def raster_to_vector(source, output, simplify_tolerance=None, dst_crs=None, **kw
         for i in fc:
             i["geometry"] = i["geometry"].simplify(tolerance=simplify_tolerance)
 
-    gdf = gpd.GeoDataFrame.from_features(fc)
-    if src.crs is not None:
-        gdf.set_crs(crs=src.crs, inplace=True)
+    # Construct the GeoJSON structure
+    geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": feature["properties"],
+                "geometry": shapely.geometry.mapping(feature["geometry"]),
+            }
+            for feature in fc
+        ],
+    }
 
-    if dst_crs is not None:
-        gdf = gdf.to_crs(dst_crs)
-
-    gdf.to_file(output, **kwargs)
-
-
-def raster_to_gpkg(tiff_path, output, simplify_tolerance=None, **kwargs):
-    """Convert a tiff file to a gpkg file.
-
-    Args:
-        tiff_path (str): The path to the tiff file.
-        output (str): The path to the gpkg file.
-        simplify_tolerance (float, optional): The maximum allowed geometry displacement.
-            The higher this value, the smaller the number of vertices in the resulting geometry.
-    """
-
-    if not output.endswith(".gpkg"):
-        output += ".gpkg"
-
-    raster_to_vector(tiff_path, output, simplify_tolerance=simplify_tolerance, **kwargs)
-
-
-def raster_to_shp(tiff_path, output, simplify_tolerance=None, **kwargs):
-    """Convert a tiff file to a shapefile.
-
-    Args:
-        tiff_path (str): The path to the tiff file.
-        output (str): The path to the shapefile.
-        simplify_tolerance (float, optional): The maximum allowed geometry displacement.
-            The higher this value, the smaller the number of vertices in the resulting geometry.
-    """
-
-    if not output.endswith(".shp"):
-        output += ".shp"
-
-    raster_to_vector(tiff_path, output, simplify_tolerance=simplify_tolerance, **kwargs)
-
-
-def raster_to_geojson(tiff_path, output, simplify_tolerance=None, **kwargs):
-    """Convert a tiff file to a GeoJSON file.
-
-    Args:
-        tiff_path (str): The path to the tiff file.
-        output (str): The path to the GeoJSON file.
-        simplify_tolerance (float, optional): The maximum allowed geometry displacement.
-            The higher this value, the smaller the number of vertices in the resulting geometry.
-    """
-
-    if not output.endswith(".geojson"):
-        output += ".geojson"
-
-    raster_to_vector(tiff_path, output, simplify_tolerance=simplify_tolerance, **kwargs)
+    # Save the GeoJSON to a file
+    with open(output, "w") as f:
+        json.dump(geojson, f, indent=2)  # Use `indent` for pretty-printing
