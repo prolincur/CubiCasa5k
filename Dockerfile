@@ -1,5 +1,5 @@
-# "docker build -t cubi -f Dockerfile ." # '-f is used when the docker file is not called "Dockerfile" but something else. In this case it is reduntant. But good to know.'
-# Run without volume "docker run -d --rm --init --gpus all --ipc=host --publish 1111:1111 -e NVIDIA_VISIBLE_DEVICES=0 cubi_localonly:0.1.0"
+# Build- "docker build -t cubi:0.1 -f Dockerfile ."
+# Run (without GPU) -  "docker run -d --rm -p 1111:1111 -v /path/to/host/output:/app/output_images cubi:0.1" (with local volume attached so that the outputs generated in "output_images" folder in Docker is saved to user specified local dir (/path/to/host/output) )
 
 FROM anibali/pytorch:cuda-9.0
 

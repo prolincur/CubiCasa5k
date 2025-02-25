@@ -16,6 +16,7 @@ from io import BytesIO
 import base64
 from datetime import datetime
 from tracing_util import raster_to_vector
+import json
 
 app = Flask(__name__)
 
@@ -31,15 +32,6 @@ logger.addHandler(handler)  # Adds the handler to the Flask logger
 OUTPUT_DIR = "output_images" 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def img_to_base64(img_array, format="PNG"):
-    """
-    Converts an image array into a base64 encoded string.
-    """
-    img = BytesIO()
-    plt.imsave(img, img_array, format=format)
-    img.seek(0)  # Go to the beginning of the BytesIO buffer
-    base64_img = base64.b64encode(img.getvalue()).decode("utf-8")
-    return base64_img
 
 @app.route("/polygon-gen")
 def health_check(): # initialised for AWS ECS health checks a '/' location
@@ -124,9 +116,17 @@ def process_image():
 
     logger.info(f"Saved output images to {OUTPUT_DIR}")
 
+    # Read the generated files
+    with open(output_files["pol_room_seg"], "rb") as img_file:
+        png_base64 = base64.b64encode(img_file.read()).decode('utf-8')
+
+    with open(output_files["vector_output_path"], "r") as geojson_file:
+        geojson_data = json.load(geojson_file)
+
     # Return paths to the saved images
     return jsonify({
-        "output_files": output_files,
+        "vector_output": geojson_data,
+        "walls": png_base64,
     })
 
 
